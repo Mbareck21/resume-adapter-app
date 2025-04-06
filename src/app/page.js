@@ -2,7 +2,7 @@
 "use client"; // Necessary for hooks and event handlers
 
 // --- Core React/Next Imports ---
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 // --- Shadcn UI Imports ---
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+
+// --- Custom UI Components ---
+import { BentoCard, BentoGrid } from "@/components/ui/bento-card";
+import { StepIndicator } from "@/components/ui/step-indicator";
+import { PillButton } from "@/components/ui/pill-button";
+import { ProcessingIndicator } from "@/components/ui/processing-indicator";
+import { ComparisonView, HighlightedText } from "@/components/ui/comparison-view";
 
 // --- Markdown Rendering Imports ---
 import ReactMarkdown from 'react-markdown';
@@ -20,18 +28,76 @@ import remarkGfm from 'remark-gfm';
 import { saveAs } from 'file-saver';
 import { Packer } from 'docx';
 import { generateDocx } from '@/lib/docx-generator'; // Make sure src/lib/docx-generator.js exists
-// --- React-PDF Imports --- ADDED ---
+// --- React-PDF Imports ---
 import { pdf } from '@react-pdf/renderer';
 import { AdaptedResumeDocument } from '@/lib/pdf-generator'; // Import the new component
 
+// --- Icons ---
+import { 
+  DocumentTextIcon, 
+  ArrowPathIcon, 
+  CloudArrowDownIcon, 
+  ChevronRightIcon,
+  SunIcon,
+  MoonIcon,
+  DocumentDuplicateIcon,
+  Bars3Icon,
+  XMarkIcon,
+  Cog6ToothIcon,
+  SwatchIcon,
+  UserCircleIcon
+} from '@heroicons/react/24/outline';
+
 export default function Home() {
-  // --- State Variables ---
+  // State variables
+  const [isNavOpen, setIsNavOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [currentStep, setCurrentStep] = useState(1);
   const [jobDescription, setJobDescription] = useState("");
   const [resumeFile, setResumeFile] = useState(null);
   const [resumeText, setResumeText] = useState("");
-  const [adaptedResume, setAdaptedResume] = useState(""); // This will store the Markdown string
+  const [adaptedResume, setAdaptedResume] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [processingStage, setProcessingStage] = useState(0);
+  const [estimatedTime, setEstimatedTime] = useState(0);
+  const [showComparison, setShowComparison] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  // Process steps
+  const steps = ["Upload Resume", "Enter Job Description", "Adapt Resume", "Download Results"];
+
+  // Processing stages for AI
+  const processingSteps = [
+    "Analyzing resume content",
+    "Identifying key skills and experiences",
+    "Matching with job requirements",
+    "Generating optimized resume"
+  ];
+
+  // --- Effect to simulate progress during loading ---
+  useEffect(() => {
+    let interval;
+    if (isLoading) {
+      setProgress(0);
+      interval = setInterval(() => {
+        setProgress(prev => {
+          // Increase progress by 2-5% randomly
+          const increment = Math.floor(Math.random() * 4) + 2;
+          const newProgress = prev + increment;
+          // Cap at 95% until complete
+          return newProgress > 95 ? 95 : newProgress;
+        });
+      }, 500);
+    } else if (progress > 0 && progress < 100) {
+      // Complete the progress bar when loading finishes
+      setProgress(100);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLoading, progress]);
 
   // --- Event Handlers ---
   const handleFileChange = useCallback((event) => {
@@ -67,15 +133,25 @@ export default function Home() {
   const handleAdaptClick = useCallback(async () => {
     console.log("Adapt button clicked");
     if (!jobDescription || !resumeText) {
-        setError("Please provide both a job description and a resume file.");
-        return;
+      setError("Please provide both a job description and a resume file.");
+      return;
     }
     setIsLoading(true);
     setError("");
     setAdaptedResume("");
+    setProcessingStage(1);
+    setEstimatedTime(15); // Initial estimate in seconds
 
     console.log("Calling backend API route...");
     try {
+      // Simulate different processing stages
+      setProcessingStage(0); // Analyzing resume
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setProcessingStage(1); // Identifying key skills
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setProcessingStage(2); // Matching with job requirements
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       const response = await fetch('/api/adapt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,17 +164,20 @@ export default function Home() {
       }
 
       const data = await response.json();
-      setAdaptedResume(data.adaptedResume); // Store the raw Markdown response
+      setAdaptedResume(data.adaptedResume);
+      setProcessingStage(3); // Generating optimized resume
       console.log("API call successful.");
+      setCurrentStep(3); // Move to results step
 
     } catch (error) {
-        console.error("API call failed:", error);
-        setError(`Failed to adapt resume: ${error.message}`);
-        setAdaptedResume("");
+      console.error("API call failed:", error);
+      setError(`Failed to adapt resume: ${error.message}`);
+      setAdaptedResume("");
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
+      setProcessingStage(0);
+      setEstimatedTime(0);
     }
-
   }, [jobDescription, resumeText]);
 
   // --- Download Handlers ---
@@ -140,103 +219,418 @@ export default function Home() {
     }
   }, [adaptedResume]); // Depends on adaptedResume state
 
+  // Add keyboard navigation handlers
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Toggle sidebar with Alt + S
+      if (e.altKey && e.key === 's') {
+        setIsNavOpen(prev => !prev);
+      }
+      
+      // Toggle dark mode with Alt + D
+      if (e.altKey && e.key === 'd') {
+        setIsDarkMode(prev => !prev);
+      }
 
-  // --- JSX Structure ---
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-start p-4 sm:p-8 md:p-12 lg:p-24 bg-gradient-to-b from-slate-50 to-slate-200 dark:from-slate-900 dark:to-slate-800">
-      <Card className="w-full max-w-4xl shadow-lg">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight">Resume Adapter AI</CardTitle>
-          <CardDescription>Paste a job description, upload your resume (.txt), and get an AI-tailored version using Google Gemini.</CardDescription>
-        </CardHeader>
+      // Navigate steps with Alt + arrow keys
+      if (e.altKey && e.key === 'ArrowRight') {
+        setCurrentStep(prev => Math.min(prev + 1, 4));
+      }
+      if (e.altKey && e.key === 'ArrowLeft') {
+        setCurrentStep(prev => Math.max(prev - 1, 1));
+      }
 
-        <CardContent className="space-y-6">
-          {/* Job Description Input */}
-          <div className="grid w-full gap-1.5">
-            <Label htmlFor="job-description" className="text-base sm:text-lg font-semibold">Job Description</Label>
-            <Textarea
-              placeholder="Paste the full job description here..."
-              id="job-description"
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              rows={10}
-              className="text-sm"
-            />
-          </div>
+      // Trigger adapt with Alt + Enter when form is complete
+      if (e.altKey && e.key === 'Enter') {
+        if (!isLoading && jobDescription && resumeText) {
+          handleAdaptClick();
+        }
+      }
+    };
 
-          <Separator />
+    // Add event listener
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleAdaptClick, isLoading, jobDescription, resumeText]);
 
-          {/* Resume Upload Input */}
-          <div className="grid w-full max-w-sm items-center gap-1.5">
-            <Label htmlFor="resume-upload" className="text-base sm:text-lg font-semibold">Your Resume (.txt)</Label>
-            <Input
-              id="resume-upload"
-              type="file"
-              accept=".txt"
-              onChange={handleFileChange}
-              className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
-            />
-             {resumeFile && !(error && error.includes("file")) && <p className="text-xs text-muted-foreground mt-1">Selected: {resumeFile.name}</p>}
-             {error && error.includes("file") && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
-          </div>
+  // Apply dark mode class to document body
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
-          <Separator />
-
-          {/* Action Button */}
-          <div className="flex justify-center pt-4">
-            <Button
-              onClick={handleAdaptClick}
-              disabled={isLoading || !jobDescription || !resumeText}
-              size="lg"
-              className="text-base px-8 py-6"
-            >
-              {isLoading ? "Adapting..." : "Adapt Resume"}
-            </Button>
-          </div>
-
-          {/* General Error Display */}
-          {error && !error.includes("file") && (
-            <p className="text-center text-red-600 dark:text-red-400 pt-2">{error}</p>
-          )}
-
-           {/* Adapted Resume Output Section */}
-           {(isLoading || adaptedResume) && (
-             <div className="grid w-full gap-1.5 pt-6">
-                <Label htmlFor="adapted-resume-output" className="text-base sm:text-lg font-semibold">Adapted Resume</Label>
-                {isLoading && (
-                    <div className="flex items-center justify-center h-40 border border-dashed rounded-md bg-slate-50 dark:bg-slate-800">
-                        <p className="text-muted-foreground animate-pulse">Generating your tailored resume...</p>
+  // Render different steps based on current step state
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 1: // Upload Resume
+        return (
+          <BentoCard 
+            title="Upload Your Resume"
+            description="Start by uploading your current resume as a .txt file"
+            className="animate-fade-in max-w-4xl mx-auto"
+          >
+            <div className="space-y-6 p-2">
+              <div className="flex flex-col space-y-2">
+                <Label htmlFor="resume-upload">Upload Resume (.txt file)</Label>
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-all duration-200">
+                  <div className="flex flex-col items-center justify-center space-y-4">
+                    <DocumentTextIcon className="h-12 w-12 text-primary" />
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Drag and drop your resume file here, or click to browse
+                      </p>
+                      <Input
+                        id="resume-upload"
+                        type="file"
+                        accept=".txt"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      <PillButton
+                        onClick={() => document.getElementById('resume-upload').click()}
+                        variant="default"
+                        className="mt-2"
+                      >
+                        Browse Files
+                      </PillButton>
                     </div>
-                )}
+                  </div>
+                </div>
+              </div>
 
-                {!isLoading && adaptedResume && (
-                    // Use Fragment <> to group multiple elements
+              {resumeFile && (
+                <div className="rounded-lg bg-secondary p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <DocumentTextIcon className="h-6 w-6 text-primary" />
+                      <div>
+                        <p className="font-medium">{resumeFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {Math.round(resumeFile.size / 1024)} KB
+                        </p>
+                      </div>
+                    </div>
+                    <PillButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setResumeFile(null);
+                        setResumeText("");
+                        document.getElementById('resume-upload').value = null;
+                      }}
+                    >
+                      Remove
+                    </PillButton>
+                  </div>
+                </div>
+              )}
+
+              {resumeText && (
+                <div className="mt-4">
+                  <Label htmlFor="resume-preview">Resume Preview</Label>
+                  <div className="mt-2 rounded-lg bg-card border border-border p-4 max-h-60 overflow-y-auto">
+                    <pre className="text-sm whitespace-pre-wrap font-mono">{resumeText}</pre>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-4">
+                <PillButton
+                  onClick={() => setCurrentStep(2)}
+                  disabled={!resumeText}
+                  variant="default"
+                  className="gap-2"
+                >
+                  Next
+                  <ChevronRightIcon className="h-4 w-4" />
+                </PillButton>
+              </div>
+            </div>
+          </BentoCard>
+        );
+
+      case 2: // Job Description
+        return (
+          <BentoCard 
+            title="Enter Job Description"
+            description="Paste the job description you're applying for"
+            className="animate-fade-in max-w-4xl mx-auto"
+          >
+            <div className="space-y-6 p-2">
+              <div className="flex flex-col space-y-2">
+                <Label htmlFor="job-description">Job Description</Label>
+                <Textarea
+                  id="job-description"
+                  placeholder="Paste the complete job description here..."
+                  className="form-textarea min-h-40"
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Character count: {jobDescription.length}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap justify-between pt-4 gap-2">
+                <PillButton
+                  onClick={() => setCurrentStep(1)}
+                  variant="outline"
+                >
+                  Back
+                </PillButton>
+                <PillButton
+                  onClick={handleAdaptClick}
+                  disabled={!jobDescription || !resumeText || isLoading}
+                  variant="default"
+                  className="gap-2"
+                >
+                  {isLoading ? (
                     <>
-                        {/* The Div containing the rendered Markdown - Target for PDF */}
-                        <div id="adapted-resume-output" className="p-4 border rounded-md bg-white dark:bg-gray-900 prose dark:prose-invert max-w-none">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {adaptedResume}
-                          </ReactMarkdown>
-                        </div>
-
-                        {/* Download Buttons - ADDED */}
-                        <div className="flex justify-end space-x-2 mt-4">
-                           <Button variant="outline" size="sm" onClick={handleDownloadPDF}>
-                               Download PDF
-                           </Button>
-                           <Button variant="outline" size="sm" onClick={handleDownloadDOCX}>
-                               Download DOCX
-                           </Button>
-                        </div>
+                      <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                      Processing...
                     </>
+                  ) : (
+                    <>
+                      Adapt Resume
+                      <ChevronRightIcon className="h-4 w-4" />
+                    </>
+                  )}
+                </PillButton>
+              </div>
+            </div>
+          </BentoCard>
+        );
+
+      case 3: // Results
+        return (
+          <div className="space-y-6 animate-fade-in max-w-6xl mx-auto">
+            {adaptedResume ? (
+              <>
+                <BentoCard 
+                  title="Resume Successfully Adapted!"
+                  description="Your resume has been optimized for the job description"
+                  className="mb-4"
+                >
+                  <div className="p-2">
+                    <div className="flex flex-wrap justify-between gap-4 mb-4">
+                      <div className="flex gap-2">
+                        <PillButton
+                          onClick={() => setShowComparison(!showComparison)}
+                          variant="outline"
+                          className="gap-2"
+                        >
+                          {showComparison ? "Hide Comparison" : "Show Comparison"}
+                          <DocumentDuplicateIcon className="h-4 w-4" />
+                        </PillButton>
+                      </div>
+                      <div className="flex gap-2">
+                        <PillButton
+                          onClick={handleDownloadPDF}
+                          variant="default"
+                          className="gap-2"
+                        >
+                          Download PDF
+                          <CloudArrowDownIcon className="h-4 w-4" />
+                        </PillButton>
+                        <PillButton
+                          onClick={handleDownloadDOCX}
+                          variant="secondary"
+                          className="gap-2"
+                        >
+                          Download DOCX
+                          <CloudArrowDownIcon className="h-4 w-4" />
+                        </PillButton>
+                      </div>
+                    </div>
+                  </div>
+                </BentoCard>
+
+                {showComparison ? (
+                  <ComparisonView
+                    original={
+                      <pre className="text-sm whitespace-pre-wrap font-mono">{resumeText}</pre>
+                    }
+                    adapted={
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {adaptedResume}
+                        </ReactMarkdown>
+                      </div>
+                    }
+                  />
+                ) : (
+                  <BentoCard className="p-2">
+                    <div className="prose prose-sm dark:prose-invert max-w-none overflow-auto">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {adaptedResume}
+                      </ReactMarkdown>
+                    </div>
+                  </BentoCard>
                 )}
-             </div>
-           )}
-        </CardContent>
-        <CardFooter className="text-center text-xs text-muted-foreground pt-6">
-         Powered by Google Gemini ✨
-        </CardFooter>
-      </Card>
-    </main>
+              </>
+            ) : (
+              <div className="flex justify-center items-center h-64">
+                <div className="text-center">
+                  <p className="text-lg text-muted-foreground">
+                    No results yet. Please adapt your resume first.
+                  </p>
+                  <PillButton
+                    onClick={() => setCurrentStep(1)}
+                    variant="default"
+                    className="mt-4"
+                  >
+                    Start Over
+                  </PillButton>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Show processing UI when loading
+  if (isLoading) {
+    return (
+      <div className="container py-12 max-w-6xl mx-auto">
+        <ProcessingIndicator
+          steps={processingSteps}
+          currentStep={processingStage}
+          progress={progress}
+          message={`${processingSteps[processingStage]} (${Math.round(progress)}%)`}
+          className="animate-fade-in py-12"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen`}>
+      {/* Navigation bar */}
+      <header className="sticky top-0 z-10 bg-card/80 backdrop-blur-sm border-b border-border">
+        <div className="container flex items-center justify-between h-16 px-4">
+          <div className="flex items-center gap-2">
+            <Bars3Icon
+              className="h-6 w-6 cursor-pointer lg:hidden"
+              onClick={() => setIsNavOpen(!isNavOpen)}
+            />
+            <h1 className="text-xl font-bold">Resume Adapter AI</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center">
+              <Label htmlFor="dark-mode" className="sr-only">Dark Mode</Label>
+              <Switch
+                id="dark-mode"
+                checked={isDarkMode}
+                onCheckedChange={setIsDarkMode}
+              />
+              {isDarkMode ? (
+                <MoonIcon className="h-5 w-5 ml-2" />
+              ) : (
+                <SunIcon className="h-5 w-5 ml-2" />
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="container py-8 px-4 max-w-6xl mx-auto">
+        {/* Multi-step indicator */}
+        {!isLoading && (
+          <StepIndicator
+            steps={steps}
+            currentStep={currentStep - 1}
+            className="mb-8"
+          />
+        )}
+
+        {/* Error display */}
+        {error && (
+          <div className="rounded-lg bg-destructive/10 border border-destructive p-4 mb-6 animate-slide-up">
+            <p className="text-destructive">{error}</p>
+          </div>
+        )}
+
+        {/* Main content area */}
+        {renderStepContent()}
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border py-6 mt-12">
+        <div className="container text-center text-sm text-muted-foreground">
+          Resume Adapter AI &copy; {new Date().getFullYear()} - Powered by Google Gemini AI
+        </div>
+      </footer>
+
+      {/* Sidebar navigation (mobile) */}
+      {isNavOpen && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
+          <div className="fixed inset-y-0 left-0 w-64 bg-card border-r border-border p-6 shadow-lg animate-slide-right">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold">Menu</h2>
+              <XMarkIcon
+                className="h-6 w-6 cursor-pointer"
+                onClick={() => setIsNavOpen(false)}
+              />
+            </div>
+            <nav className="space-y-4">
+              <div
+                className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary cursor-pointer"
+                onClick={() => {
+                  setCurrentStep(1);
+                  setIsNavOpen(false);
+                }}
+              >
+                <DocumentTextIcon className="h-5 w-5" />
+                <span>Upload Resume</span>
+              </div>
+              <div
+                className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary cursor-pointer"
+                onClick={() => {
+                  setCurrentStep(2);
+                  setIsNavOpen(false);
+                }}
+              >
+                <DocumentTextIcon className="h-5 w-5" />
+                <span>Job Description</span>
+              </div>
+              <div
+                className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary cursor-pointer"
+                onClick={() => {
+                  setCurrentStep(3);
+                  setIsNavOpen(false);
+                }}
+              >
+                <DocumentDuplicateIcon className="h-5 w-5" />
+                <span>Results</span>
+              </div>
+              <Separator />
+              <div className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary cursor-pointer">
+                <Cog6ToothIcon className="h-5 w-5" />
+                <span>Settings</span>
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary cursor-pointer">
+                <SwatchIcon className="h-5 w-5" />
+                <span>Themes</span>
+              </div>
+              <div className="flex items-center gap-2 p-2 rounded-md hover:bg-secondary cursor-pointer">
+                <UserCircleIcon className="h-5 w-5" />
+                <span>Account</span>
+              </div>
+            </nav>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

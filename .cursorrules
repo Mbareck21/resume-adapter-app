@@ -1,0 +1,46 @@
+# Resume Adapter AI Project Rules
+
+## Code Style & Practices
+
+- **Component Structure**: Use functional components with hooks
+- **File Organization**: 
+  - Page components in `src/app`
+  - Reusable components in `src/components`
+  - Utility functions in `src/lib`
+  - API routes in `src/app/api`
+- **Naming Conventions**:
+  - PascalCase for components
+  - camelCase for functions and variables
+  - kebab-case for CSS classes
+- **State Management**: Prefer React hooks and Context API
+- **CSS Approach**: Use Tailwind CSS with component classes
+
+## Technical Decisions
+
+- **AI Integration**: Use Google's Generative AI SDK with safety settings
+- **Document Format**: Generate PDF with @react-pdf/renderer, DOCX with docx
+- **Markdown Handling**: Use react-markdown with remark-gfm for rendering
+- **Theme Support**: Implement both dark and light mode options
+- **Form Handling**: Use native form elements with controlled inputs
+
+## Project Implementation Details
+
+- **Resume Upload**: Supports .txt files or direct text input
+- **AI Processing**: Uses Next.js API route with gemini-1.5-flash-latest model
+- **Output Generation**: Markdown as intermediate format for all outputs
+- **UI Components**: Mix of Shadcn UI components and custom implementations
+
+## Development Workflow
+
+- **Environment Variables**: Store secrets in .env.local
+- **Development Server**: Use `npm run dev` with Turbopack enabled
+- **Deployment Target**: Vercel platform
+- **Code Quality**: Follow ESLint rules defined in eslint.config.mjs
+
+## User Experience Priorities
+
+- **Load Times**: Keep initial load under 2 seconds
+- **Processing Feedback**: Clear indication when AI is processing
+- **Error Handling**: User-friendly error messages
+- **Accessibility**: Ensure all UI elements are accessible
+- **Mobile Support**: Design responsively with desktop as primary focus 
